@@ -1,64 +1,45 @@
-from telebot import TeleBot, types
+from telebot import types
 
-# Храним временные данные для регистрации
-players_data = {}
-
-def register_handlers(bot: TeleBot):
-    # Обработчик команды /start
-    @bot.message_handler(commands=['start'])
-    def start_message(message: types.Message):
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button = types.KeyboardButton("Начать регистрацию")
-        markup.add(button)
-        bot.send_message(message.chat.id, "Привет! Нажми на кнопку ниже, чтобы начать регистрацию игроков.", reply_markup=markup)
-
-    # Начинаем регистрацию
-    @bot.message_handler(func=lambda message: message.text == "Начать регистрацию")
-    def start_registration(message: types.Message):
+def register_handlers(bot, players):
+    @bot.message_handler(commands=['register'])
+    def start_registration(message):
+        players.clear()  # Очищаем список игроков перед началом новой регистрации
         bot.send_message(message.chat.id, "Введите количество игроков:")
-        bot.register_next_step_handler(message, process_player_count)
 
-    # Обрабатываем ввод количества игроков
-    def process_player_count(message: types.Message):
+        bot.register_next_step_handler(message, get_player_count)
+
+    def get_player_count(message):
         try:
-            player_count = int(message.text)
-            if player_count < 2:
-                bot.send_message(message.chat.id, "Количество игроков должно быть не меньше 2. Введите снова:")
-                bot.register_next_step_handler(message, process_player_count)
+            count = int(message.text)
+            if count < 2:
+                bot.send_message(message.chat.id, "Нужно как минимум 2 игрока.")
                 return
-            # Сохраняем количество игроков в словарь
-            players_data[message.chat.id] = {'count': player_count, 'players': []}
-            bot.send_message(message.chat.id, f"Ок! Теперь вводите имена игроков. Введите имя игрока 1:")
-            bot.register_next_step_handler(message, process_player_name)
+
+            bot.send_message(message.chat.id, f"Введите имена {count} игроков.")
+            players_data = {
+                'count': count,
+                'current': 0
+            }
+            bot.register_next_step_handler(message, lambda msg: get_player_names(msg, players_data))
         except ValueError:
-            bot.send_message(message.chat.id, "Введите числовое значение для количества игроков.")
-            bot.register_next_step_handler(message, process_player_count)
+            bot.send_message(message.chat.id, "Пожалуйста, введите число.")
 
-    # Обрабатываем ввод имен игроков
-    def process_player_name(message: types.Message):
-        chat_id = message.chat.id
-        if chat_id in players_data:
-            players_info = players_data[chat_id]
-            players_info['players'].append(message.text)
-            if len(players_info['players']) < players_info['count']:
-                bot.send_message(chat_id, f"Имя игрока {len(players_info['players']) + 1}:")
-                bot.register_next_step_handler(message, process_player_name)
-            else:
-                player_list = ", ".join(players_info['players'])
-                bot.send_message(chat_id, f"Все игроки зарегистрированы: {player_list}.\nНажмите 'Подтвердить', чтобы закончить.")
-                confirm_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                confirm_button = types.KeyboardButton("Подтвердить")
-                confirm_markup.add(confirm_button)
-                bot.send_message(chat_id, "Подтвердите регистрацию.", reply_markup=confirm_markup)
-                bot.register_next_step_handler(message, confirm_registration)
+    def get_player_names(message, players_data):
+        players.append(message.text)
+        players_data['current'] += 1
 
-    # Обрабатываем подтверждение регистрации
-    def confirm_registration(message: types.Message):
-        chat_id = message.chat.id
-        if message.text == "Подтвердить" and chat_id in players_data:
-            players_info = players_data[chat_id]
-            player_list = ", ".join(players_info['players'])
-            bot.send_message(chat_id, f"Регистрация завершена. Игроки: {player_list}")
-            del players_data[chat_id]  # Удаляем данные после завершения регистрации
+        if players_data['current'] < players_data['count']:
+            bot.send_message(message.chat.id, f"Введите имя игрока {players_data['current'] + 1}:")
+            bot.register_next_step_handler(message, lambda msg: get_player_names(msg, players_data))
         else:
-            bot.send_message(chat_id, "Выберите 'Подтвердить' для завершения регистрации.")
+            bot.send_message(message.chat.id, "Регистрация завершена!")
+            show_options(message)
+
+    def show_options(message):
+        """
+        Показывает кнопки для выбора: начать заново или сформировать сетку игр.
+        """
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add('Пройти регистрацию заново', 'Сформировать сетку игр')
+
+        bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
