@@ -3,6 +3,7 @@ from telebot import TeleBot, types
 from dotenv import load_dotenv
 from registration import register_handlers
 from match_maker import get_match_schedule
+from game_process import handle_game_process, show_current_match, handle_match_result  # Добавили функцию обработки результата игры
 
 # Загружаем переменные окружения из .env
 load_dotenv()
@@ -93,14 +94,21 @@ def start_matches(message):
         bot.reply_to(message, "Произошла ошибка при создании расписания.")
         return
 
-    # Формируем строку для вывода сетки матчей
-    response = "Расписание матчей:\n"
-    for match in match_schedule:
-        response += f"{match[0]} vs {match[1]}\n"
+    # Передаём управление игровому процессу
+    handle_game_process(bot, message, match_schedule)
 
-    # Отправляем расписание матчей в чат
-    bot.send_message(message.chat.id, response)
 
+# Обработчик для кнопки "Начать игру"
+@bot.message_handler(func=lambda message: message.text == 'Начать игру')
+def begin_game(message):
+    # Показываем первый матч
+    show_current_match(bot, message.chat.id)
+
+
+# Обработчик callback для выбора победителя
+@bot.callback_query_handler(func=lambda call: call.data.startswith("win_"))
+def callback_winner(call):
+    handle_match_result(bot, call)  # Передаём в функцию обработки результата
 
 
 # Запуск бота
