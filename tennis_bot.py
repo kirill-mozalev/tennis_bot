@@ -3,7 +3,7 @@ import logging
 from telebot import TeleBot, types
 from dotenv import load_dotenv
 from registration import register_handlers
-from game_process import start_game, handle_match_result
+from game_process import start_game
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -21,17 +21,18 @@ matches = []
 # Регистрируем обработчики команд
 register_handlers(bot, players)
 
-# Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start_bot(message):
-    players.clear()
-    matches.clear()
+    reset_game_state()
     logging.info(f"Пользователь {message.from_user.id} начал регистрацию заново.")
     bot.send_message(message.chat.id, "Привет! Давайте начнём регистрацию игроков. Введите количество игроков:")
     bot.register_next_step_handler(message, get_player_count)
 
+def reset_game_state():
+    """Сбрасывает состояние игры и очищает списки игроков и матчей."""
+    players.clear()
+    matches.clear()
 
-# Логика для обработки ввода количества игроков
 def get_player_count(message):
     try:
         count = int(message.text)
@@ -46,8 +47,6 @@ def get_player_count(message):
         bot.send_message(message.chat.id, "Пожалуйста, введите число.")
         bot.register_next_step_handler(message, get_player_count)
 
-
-# Логика для сбора имён игроков
 def get_player_names(message, players_data):
     players.append(message.text)
     players_data['current'] += 1
@@ -61,25 +60,19 @@ def get_player_names(message, players_data):
         bot.send_message(message.chat.id, "Регистрация завершена!")
         show_options(message)
 
-
-# Показываем кнопки после регистрации
 def show_options(message):
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     markup.add('Пройти регистрацию заново', 'Сформировать сетку игр')
     logging.info(f"Пользователь {message.from_user.id} видит выбор: заново или сформировать сетку.")
     bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
 
-
-# Обработчик для кнопки "Пройти регистрацию заново"
 @bot.message_handler(func=lambda message: message.text == 'Пройти регистрацию заново')
 def restart_registration(message):
-    players.clear()
+    reset_game_state()
     logging.info(f"Пользователь {message.from_user.id} начал регистрацию заново.")
     bot.send_message(message.chat.id, "Введите количество игроков:")
     bot.register_next_step_handler(message, get_player_count)
 
-
-# Обработчик для кнопки "Сформировать сетку игр"
 @bot.message_handler(func=lambda message: message.text == 'Сформировать сетку игр')
 def start_matches(message):
     if len(players) < 2:
@@ -99,21 +92,11 @@ def start_matches(message):
     markup.add('Начать игру', 'Пройти регистрацию заново')
     bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
 
-
-# Обработчик для кнопки "Начать игру"
 @bot.message_handler(func=lambda message: message.text == 'Начать игру')
 def begin_game(message):
     logging.info(f"Пользователь {message.from_user.id} нажал кнопку 'Начать игру'.")
     start_game(bot, message.chat.id, matches)
 
-
-# Обработчик для callback'ов
-@bot.callback_query_handler(func=lambda call: True)
-def callback_winner(call):
-    logging.info(f"Получен callback от пользователя {call.from_user.id} с данными: {call.data}")
-    handle_match_result(bot, call, matches)
-
-
 if __name__ == "__main__":
     logging.info("Бот запущен и ожидает действий.")
-    bot.polling(none_stop=True)
+    bot.polling(none_stop=True, interval=0)
