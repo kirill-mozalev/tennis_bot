@@ -1,59 +1,47 @@
+import logging
 from telebot import types
 
-matches = []  # Список матчей с индексами
-current_match_index = 0  # Индекс текущего матча
+current_match_index = 0
 
-
-# Функция для обработки игрового процесса
-def handle_game_process(bot, message, match_schedule):
-    global matches, current_match_index
+def start_game(bot, chat_id, matches):
+    global current_match_index
     current_match_index = 0
-
-    # Присваиваем индекс каждому матчу
-    matches = [(index + 1, match[0], match[1]) for index, match in enumerate(match_schedule)]
-
-    # Формируем строку для вывода сетки матчей
-    response = "Расписание матчей:\n"
-    for index, player1, player2 in matches:
-        response += f"Игра {index}: {player1} vs {player2}\n"
-
-    # Показываем кнопки: начать игру или пройти регистрацию заново
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    markup.add('Пройти регистрацию заново', 'Начать игру')
-
-    # Отправляем расписание матчей в чат
-    bot.send_message(message.chat.id, response)
-    bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
+    if matches:
+        show_current_match(bot, chat_id, matches)
+    else:
+        bot.send_message(chat_id, "Нет матчей для начала игры.")
 
 
-# Показ текущего матча и выбор победителя
-def show_current_match(bot, chat_id):
-    global current_match_index, matches
+def show_current_match(bot, chat_id, matches):
+    global current_match_index
     if current_match_index >= len(matches):
-        bot.send_message(chat_id, "Все игры завершены!")
+        bot.send_message(chat_id, "Все матчи завершены!")
+        logging.info(f"Все матчи завершены для чата {chat_id}.")
         return
 
     match = matches[current_match_index]
-    match_id, player1, player2 = match
+    player1, player2 = match[1], match[2]
 
+    logging.info(f"Показываем матч {match[0]}: {player1} vs {player2} для чата {chat_id}.")
+
+    # Создаем inline-кнопки для выбора победителя
     markup = types.InlineKeyboardMarkup()
-    button1 = types.InlineKeyboardButton(text=player1, callback_data=f"win_{player1}")
-    button2 = types.InlineKeyboardButton(text=player2, callback_data=f"win_{player2}")
+    button1 = types.InlineKeyboardButton(f"{player1} победил", callback_data=f"win_{player1}")
+    button2 = types.InlineKeyboardButton(f"{player2} победил", callback_data=f"win_{player2}")
     markup.add(button1, button2)
 
-    bot.send_message(chat_id, f"Игра {match_id}: {player1} vs {player2}\nВыберите победителя:", reply_markup=markup)
+    bot.send_message(chat_id, f"Текущий матч: {player1} vs {player2}\nВыберите победителя:", reply_markup=markup)
 
 
-# Обработчик для выбора победителя
-def handle_match_result(bot, call):
+def handle_match_result(bot, call, matches):
     global current_match_index
-    winner = call.data.split('_')[1]
+
+    winner = call.data.replace("win_", "")
+    logging.info(f"Победитель выбран: {winner}")
+
+    bot.answer_callback_query(call.id, f"Победитель: {winner}")
     bot.send_message(call.message.chat.id, f"Победитель: {winner}")
 
+    # Переходим к следующему матчу
     current_match_index += 1
-
-    # Проверяем, есть ли ещё матчи
-    if current_match_index < len(matches):
-        show_current_match(bot, call.message.chat.id)
-    else:
-        bot.send_message(call.message.chat.id, "Все игры завершены!")
+    show_current_match(bot, call.message.chat.id, matches)
