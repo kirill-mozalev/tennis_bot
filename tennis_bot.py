@@ -4,6 +4,7 @@ from telebot import TeleBot, types
 from dotenv import load_dotenv
 from registration import register_handlers
 from game_process import start_game
+from match_maker import get_match_schedule
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -70,36 +71,29 @@ def show_options(message):
 @bot.message_handler(func=lambda message: message.text == 'Пройти регистрацию заново')
 def restart_registration(message):
     players.clear()
-    logging.info(f"Пользователь {message.from_user.id} начал регистрацию заново.")
     bot.send_message(message.chat.id, "Введите количество игроков:")
     bot.register_next_step_handler(message, get_player_count)
 
 # Обработчик для кнопки "Сформировать сетку игр"
 @bot.message_handler(func=lambda message: message.text == 'Сформировать сетку игр')
-def start_matches(message):
+def create_match_schedule(message):
     if len(players) < 2:
-        bot.reply_to(message, "Недостаточно игроков для формирования пар.")
+        bot.send_message(message.chat.id, "Недостаточно игроков для создания сетки.")
         return
 
     global matches
-    matches = [(i + 1, players[i % len(players)], players[(i + 1) % len(players)]) for i in range(len(players))]
-    response = "Расписание матчей:\n"
-    for match in matches:
-        response += f"{match[0]}. {match[1]} vs {match[2]}\n"
+    matches = get_match_schedule(players)
+    numbered_matches = [(i+1, match[0], match[1]) for i, match in enumerate(matches)]
 
-    logging.info(f"Пользователь {message.from_user.id} сформировал сетку игр: {matches}")
-    bot.send_message(message.chat.id, response)
+    logging.info(f"Сетка матчей сформирована: {numbered_matches}")
 
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    markup.add('Начать игру', 'Пройти регистрацию заново')
-    bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
+    # Формируем строку со всеми матчами
+    match_list_message = "Сетка игр:\n" + "\n".join([f"Матч {match[0]}: {match[1]} vs {match[2]}" for match in numbered_matches])
 
-# Обработчик для кнопки "Начать игру"
-@bot.message_handler(func=lambda message: message.text == 'Начать игру')
-def begin_game(message):
-    logging.info(f"Пользователь {message.from_user.id} нажал кнопку 'Начать игру'.")
-    start_game(bot, message.chat.id, matches)
+    bot.send_message(message.chat.id, match_list_message)
 
+    start_game(bot, message.chat.id, numbered_matches)
+
+# Запуск бота
 if __name__ == "__main__":
-    logging.info("Бот запущен и ожидает действий.")
-    bot.polling(none_stop=True, interval=0)
+    bot.polling(none_stop=True)
