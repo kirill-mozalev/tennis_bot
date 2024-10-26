@@ -1,15 +1,18 @@
-from collections import defaultdict
-
 class Tournament:
     def __init__(self):
+        self.players = []
         self.matches = []
         self.current_match_index = 0
-        self.current_round_wins = defaultdict(int)  # Победы текущего круга
-        self.total_wins = defaultdict(int)          # Общие победы за все круги
+        self.total_results = {}   # Общая статистика за все круги
+        self.round_results = {}   # Статистика текущего круга
+
+    def add_player(self, player):
+        self.players.append(player)
 
     def set_matches(self, matches):
         self.matches = matches
         self.current_match_index = 0
+        self.round_results = {player: 0 for player in self.players}  # Сброс статистики текущего круга
 
     def get_current_match(self):
         if self.current_match_index < len(self.matches):
@@ -19,26 +22,30 @@ class Tournament:
     def increment_match_index(self):
         self.current_match_index += 1
 
-    def add_result(self, winner):
-        # Обновляем победы для текущего круга
-        self.current_round_wins[winner] += 1
-        logging.info(f"Победа добавлена игроку {winner} в текущем круге. Текущие победы: {self.current_round_wins}")
+    def add_win(self, winner):
+        # Обновляем статистику текущего круга
+        if winner in self.round_results:
+            self.round_results[winner] += 1
+        else:
+            self.round_results[winner] = 1
+        # Обновляем общую статистику
+        if winner in self.total_results:
+            self.total_results[winner] += 1
+        else:
+            self.total_results[winner] = 1
 
-    def is_round_finished(self):
+    def get_round_results(self):
+        return self.round_results
+
+    def get_total_results(self):
+        return self.total_results
+
+    def is_tournament_finished(self):
         return self.current_match_index >= len(self.matches)
 
-    def end_round(self):
-        # По окончании круга добавляем победы текущего круга в общую статистику
-        for player, wins in self.current_round_wins.items():
-            self.total_wins[player] += wins
-        self.current_round_wins.clear()  # Очищаем статистику текущего круга
-        self.current_match_index = 0     # Сбрасываем индекс матчей для следующего круга
-        logging.info(f"Раунд завершен. Общая статистика побед: {self.total_wins}")
-
-    def get_round_statistics(self):
-        # Возвращает статистику текущего круга
-        return dict(self.current_round_wins)
-
-    def get_total_statistics(self):
-        # Возвращает общую статистику за все круги
-        return dict(self.total_wins)
+    def reset_statistics(self):
+        """Сбрасываем всю статистику, если нужно начать с нуля."""
+        self.total_results = {}
+        self.round_results = {}
+        self.current_match_index = 0
+        self.matches = []

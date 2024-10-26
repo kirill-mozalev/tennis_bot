@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from registration import register_handlers
 from game_process import start_game
 from match_maker import get_match_schedule
-
+from game_process import reset_tournament
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -25,6 +25,7 @@ register_handlers(bot, players)
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start_bot(message):
+    reset_tournament()  # Полный сброс статистики при новой регистрации
     players.clear()
     matches.clear()
     logging.info(f"Пользователь {message.from_user.id} начал регистрацию заново.")

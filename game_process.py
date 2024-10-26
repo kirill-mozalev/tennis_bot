@@ -1,75 +1,35 @@
 import logging
 from telebot import types
-from collections import defaultdict
+from tournament import Tournament  # Импортируем класс из tournament.py
 
-class Tournament:
-    def __init__(self):
-        self.matches = []
-        self.current_match_index = 0
-        self.current_round_wins = defaultdict(int)  # Победы текущего круга
-        self.total_wins = defaultdict(int)          # Общие победы за все круги
-
-    def set_matches(self, matches):
-        self.matches = matches
-        self.current_match_index = 0
-
-    def get_current_match(self):
-        if self.current_match_index < len(self.matches):
-            return self.matches[self.current_match_index]
-        return None
-
-    def increment_match_index(self):
-        self.current_match_index += 1
-
-    def add_result(self, winner):
-        # Обновляем победы для текущего круга
-        self.current_round_wins[winner] += 1
-        logging.info(f"Победа добавлена игроку {winner} в текущем круге. Текущие победы: {self.current_round_wins}")
-
-    def is_round_finished(self):
-        return self.current_match_index >= len(self.matches)
-
-    def end_round(self):
-        # По окончании круга добавляем победы текущего круга в общую статистику
-        for player, wins in self.current_round_wins.items():
-            self.total_wins[player] += wins
-        self.current_round_wins.clear()  # Очищаем статистику текущего круга
-        self.current_match_index = 0     # Сбрасываем индекс матчей для следующего круга
-        logging.info(f"Раунд завершен. Общая статистика побед: {self.total_wins}")
-
-    def get_round_statistics(self):
-        # Возвращает статистику текущего круга
-        return dict(self.current_round_wins)
-
-    def get_total_statistics(self):
-        # Возвращает общую статистику за все круги
-        return dict(self.total_wins)
-
-
-# Инициализация турнира как глобальной переменной
+# Создаем объект турнира
 tournament = Tournament()
 
 
-def start_game(bot, chat_id, matches):
-    global tournament  # Используем глобальный турнир
-    tournament.set_matches(matches)  # Устанавливаем матчи для турнира
+def start_registration(bot, chat_id):
+    """Начинает новую регистрацию и сбрасывает статистику."""
+    reset_tournament()
+    bot.send_message(chat_id, "Начата новая регистрация. Пожалуйста, добавьте игроков.")
 
+
+def start_game(bot, chat_id, matches):
+    """Запускает новый турнир и отображает первый матч."""
+    tournament.set_matches(matches)
     if tournament.get_current_match():
-        show_current_match(bot, chat_id, tournament)
+        show_current_match(bot, chat_id)
     else:
         bot.send_message(chat_id, "Нет матчей для начала игры.")
 
 
-def show_current_match(bot, chat_id, tournament):
+def show_current_match(bot, chat_id):
+    """Отображает текущий матч и кнопки для выбора победителя."""
     match = tournament.get_current_match()
     if not match:
         bot.send_message(chat_id, "Все матчи завершены!")
-        logging.info(f"Все матчи завершены для чата {chat_id}.")
-        end_round(bot, chat_id, tournament)  # Завершаем текущий круг
+        end_round(bot, chat_id)
         return
 
     match_number, player1, player2 = match
-
     logging.info(f"Показываем матч {match_number}: {player1} vs {player2} для чата {chat_id}.")
 
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
@@ -78,54 +38,65 @@ def show_current_match(bot, chat_id, tournament):
     markup.add(button1, button2)
 
     bot.send_message(chat_id, f"Текущий матч: {player1} vs {player2}\nВыберите победителя:", reply_markup=markup)
-
-    # Запрашиваем результат матча и передаем объект турнира
-    bot.register_next_step_handler_by_chat_id(chat_id, lambda msg: handle_match_result(bot, msg, tournament))
+    bot.register_next_step_handler_by_chat_id(chat_id, lambda message: handle_match_result(bot, message))
 
 
-def handle_match_result(bot, message, tournament):
+def handle_match_result(bot, message):
+    """Обрабатывает выбор победителя и отображает следующий матч или завершает круг."""
     winner = message.text.replace(" победил", "")
-    tournament.add_result(winner)  # Добавляем результат
+    tournament.add_win(winner)  # Обновляем статистику побед
     logging.info(f"Победитель выбран: {winner}")
 
     bot.send_message(message.chat.id, f"Победитель: {winner}")
-
-    # Переходим к следующему матчу
     tournament.increment_match_index()
 
-    if tournament.is_round_finished():
-        end_round(bot, message.chat.id, tournament)
-        return
+    if tournament.is_tournament_finished():
+        end_round(bot, message.chat.id)
+    else:
+        show_current_match(bot, message.chat.id)
 
-    show_current_match(bot, message.chat.id, tournament)
 
+def end_round(bot, chat_id):
+    """Завершает текущий круг и отображает статистику."""
+    round_results = tournament.get_round_results()
+    total_results = tournament.get_total_results()
 
-def end_round(bot, chat_id, tournament):
-    # Завершаем текущий круг и обновляем общую статистику
-    tournament.end_round()
+    # Вывод статистики текущего круга
+    round_message = "Статистика текущего круга:\n" + "\n".join(
+        [f"{player}: {wins} побед" for player, wins in round_results.items()])
+    bot.send_message(chat_id, round_message)
 
-    # Статистика текущего круга
-    current_round_stats = tournament.get_round_statistics()
-    current_round_message = "Статистика текущего круга:\n" + "\n".join([f"{player}: {wins} побед" for player, wins in current_round_stats.items()])
-
-    # Общая статистика за все круги
-    total_stats = tournament.get_total_statistics()
-    total_stats_message = "Общая статистика побед за все круги:\n" + "\n".join([f"{player}: {wins} побед" for player, wins in total_stats.items()])
-
-    # Отправляем статистику в чат
-    bot.send_message(chat_id, current_round_message)
-    bot.send_message(chat_id, total_stats_message)
+    # Вывод общей статистики
+    total_message = "Общая статистика побед за все круги:\n" + "\n".join(
+        [f"{player}: {wins} побед" for player, wins in total_results.items()])
+    bot.send_message(chat_id, total_message)
 
     # Кнопки для нового круга или завершения игры
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add('Начать новый круг', 'Завершить игру на сегодня')
-    bot.send_message(chat_id, "Выберите действие:", reply_markup=markup)
-    bot.register_next_step_handler_by_chat_id(chat_id, lambda msg: handle_round_action(bot, msg, tournament))
+    bot.send_message(chat_id, "Что вы хотите сделать дальше?", reply_markup=markup)
+
+    # После завершения текущего круга очищаем статистику текущего круга
+    tournament.round_results = {player: 0 for player in tournament.players}
+    bot.register_next_step_handler_by_chat_id(chat_id, lambda message: handle_post_round_choice(bot, message))
 
 
-def handle_round_action(bot, message, tournament):
+
+def handle_post_round_choice(bot, message):
+    """Обрабатывает выбор пользователя после завершения круга."""
     if message.text == 'Начать новый круг':
-        # Начинаем новый круг с теми же матчами
-        start_game(bot, message.chat.id, tournament.matches)
+        logging.info("Начинаем новый круг.")
+        start_game(bot, message.chat.id, tournament.matches)  # Начинаем новый круг с той же сеткой
     elif message.text == 'Завершить игру на сегодня':
-        bot.send_message(message.chat.id, "Игра завершена! Спасибо за участие.")
+        bot.send_message(message.chat.id, "Игра завершена. Спасибо за участие!")
+        logging.info("Игра завершена пользователем.")
+    else:
+        bot.send_message(message.chat.id,
+                         "Пожалуйста, выберите действие: 'Начать новый круг' или 'Завершить игру на сегодня'.")
+        bot.register_next_step_handler(message, lambda message: handle_post_round_choice(bot, message))
+
+
+def reset_tournament():
+    """Сбрасывает всю статистику при новой регистрации игроков."""
+    logging.info("Сбрасываем статистику турнира и все данные о матчах.")
+    tournament.reset_statistics()
