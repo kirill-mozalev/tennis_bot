@@ -58,17 +58,19 @@ def handle_match_result(bot, message):
 
 def end_round(bot, chat_id):
     """Завершает текущий круг и отображает статистику."""
-    round_results = tournament.get_round_results()
-    total_results = tournament.get_total_results()
+    round_results = dict(sorted(tournament.get_round_results().items(), key=lambda item: item[1], reverse=True))
+    total_results = dict(sorted(tournament.get_total_results().items(), key=lambda item: item[1], reverse=True))
 
     # Вывод статистики текущего круга
     round_message = "Статистика текущего круга:\n" + "\n".join(
-        [f"{player}: {wins} побед" for player, wins in round_results.items()])
+        [f"{player}: {wins} побед" for player, wins in round_results.items()]
+    )
     bot.send_message(chat_id, round_message)
 
     # Вывод общей статистики
     total_message = "Общая статистика побед за все круги:\n" + "\n".join(
-        [f"{player}: {wins} побед" for player, wins in total_results.items()])
+        [f"{player}: {wins} побед" for player, wins in total_results.items()]
+    )
     bot.send_message(chat_id, total_message)
 
     # Кнопки для нового круга или завершения игры
@@ -76,10 +78,9 @@ def end_round(bot, chat_id):
     markup.add('Начать новый круг', 'Завершить игру на сегодня')
     bot.send_message(chat_id, "Что вы хотите сделать дальше?", reply_markup=markup)
 
-    # После завершения текущего круга очищаем статистику текущего круга
+    # Очищаем статистику текущего круга
     tournament.round_results = {player: 0 for player in tournament.players}
     bot.register_next_step_handler_by_chat_id(chat_id, lambda message: handle_post_round_choice(bot, message))
-
 
 
 def handle_post_round_choice(bot, message):
@@ -88,11 +89,21 @@ def handle_post_round_choice(bot, message):
         logging.info("Начинаем новый круг.")
         start_game(bot, message.chat.id, tournament.matches)  # Начинаем новый круг с той же сеткой
     elif message.text == 'Завершить игру на сегодня':
+        # Получаем и сортируем общую статистику перед завершением
+        total_results = dict(sorted(tournament.get_total_results().items(), key=lambda item: item[1], reverse=True))
+        total_message = "Общая статистика побед за все круги:\n" + "\n".join(
+            [f"{player}: {wins} побед" for player, wins in total_results.items()]
+        )
+        bot.send_message(message.chat.id, total_message)
+
+        # Сообщение о завершении игры
         bot.send_message(message.chat.id, "Игра завершена. Спасибо за участие!")
         logging.info("Игра завершена пользователем.")
     else:
-        bot.send_message(message.chat.id,
-                         "Пожалуйста, выберите действие: 'Начать новый круг' или 'Завершить игру на сегодня'.")
+        bot.send_message(
+            message.chat.id,
+            "Пожалуйста, выберите действие: 'Начать новый круг' или 'Завершить игру на сегодня'."
+        )
         bot.register_next_step_handler(message, lambda message: handle_post_round_choice(bot, message))
 
 
