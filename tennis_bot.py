@@ -29,7 +29,7 @@ def start_bot(message):
     players.clear()
     matches.clear()
     logging.info(f"Пользователь {message.from_user.id} начал регистрацию заново.")
-    bot.send_message(message.chat.id, "Привет! Давайте начнём регистрацию игроков. Введите количество игроков:")
+    bot.send_message(message.chat.id, "Здорово бродяги, давай жоска замахаемся в теннис. Скок вас сегодня")
     bot.register_next_step_handler(message, get_player_count)
 
 # Логика для обработки ввода количества игроков
@@ -66,7 +66,7 @@ def show_options(message):
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     markup.add('Пройти регистрацию заново', 'Сформировать сетку игр')
     logging.info(f"Пользователь {message.from_user.id} видит выбор: заново или сформировать сетку.")
-    bot.send_message(message.chat.id, "Что вы хотите сделать дальше?", reply_markup=markup)
+    bot.send_message(message.chat.id, "Че дальше делаем тыкни кнопочку по братски", reply_markup=markup)
 
 # Обработчик для кнопки "Пройти регистрацию заново"
 @bot.message_handler(func=lambda message: message.text == 'Пройти регистрацию заново')
@@ -94,6 +94,10 @@ def create_match_schedule(message):
     bot.send_message(message.chat.id, match_list_message)
 
     start_game(bot, message.chat.id, numbered_matches)
+
+@bot.message_handler(func=lambda message: message.text == 'Начать регистрацию')
+def restart_registration_via_button(message):
+    start_bot(message)  # Перезапускаем с функции start_bot, где уже сбрасываются данные
 
 # Запуск бота
 if __name__ == "__main__":
